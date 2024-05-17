@@ -2,7 +2,7 @@ import os
 import re
 import json
 import shutil
-import os
+import zipfile
 from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
@@ -14,20 +14,25 @@ from tavily import TavilyClient
 openai_client = OpenAI(api_key="sk-nadbot-Wf5jbmmDnoOG9nnxcjo5T3BlbkFJsc9LqRhDBuK6M5RmOtB2")
 anthropic_client = Anthropic(api_key="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")
 
-# Available models
+# Available OpenAI models
 ORCHESTRATOR_MODEL = "gpt-4o"
 SUB_AGENT_MODEL = "gpt-4o"
+
+# Available Claude models for Anthropic API
 REFINER_MODEL = "claude-3-opus-20240229"
 
 # Initialize the Rich Console
 console = Console()
 
 def calculate_subagent_cost(model, input_tokens, output_tokens):
+    # Pricing information per model
     pricing = {
         "claude-3-opus-20240229": {"input_cost_per_mtok": 15.00, "output_cost_per_mtok": 75.00},
         "claude-3-haiku-20240307": {"input_cost_per_mtok": 0.25, "output_cost_per_mtok": 1.25},
         "claude-3-sonnet-20240229": {"input_cost_per_mtok": 3.00, "output_cost_per_mtok": 15.00},
     }
+
+    # Calculate cost
     input_cost = (input_tokens / 1_000_000) * pricing[model]["input_cost_per_mtok"]
     output_cost = (output_tokens / 1_000_000) * pricing[model]["output_cost_per_mtok"]
     total_cost = input_cost + output_cost
@@ -72,8 +77,6 @@ def gpt_orchestrator(objective, file_content=None, previous_results=None, use_se
             except json.JSONDecodeError as e:
                 console.print(Panel(f"Error parsing JSON: {e}", title="[bold red]JSON Parsing Error[/bold red]", title_align="left", border_style="red"))
                 console.print(Panel(f"Skipping search query extraction.", title="[bold yellow]Search Query Extraction Skipped[/bold yellow]", title_align="left", border_style="yellow"))
-        else:
-            search_query = None
 
     return response_text, file_content, search_query
 
@@ -89,8 +92,11 @@ def gpt_sub_agent(prompt, search_query=None, previous_gpt_tasks=None, use_search
     qna_response = None
     if search_query and use_search:
         tavily = TavilyClient(api_key="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")
-        qna_response = tavily.qna_search(query=search_query)
-        console.print(f"QnA response: {qna_response}", style="yellow")
+        try:
+            qna_response = tavily.qna_search(query=search_query)
+            console.print(f"QnA response: {qna_response}", style="yellow")
+        except Exception as e:
+            console.print(Panel(f"Error during Tavily QnA search: {e}", title="[bold red]QnA Search Error[/bold red]", title_align="left", border_style="red"))
 
     messages = [
         {"role": "system", "content": system_message},
@@ -119,35 +125,38 @@ def gpt_sub_agent(prompt, search_query=None, previous_gpt_tasks=None, use_search
 
     return response_text
 
-def anthropic_refine(objective, sub_task_results, filename, projectname, continuation=False):
+def anthropic_refine(objective, sub_task_results, timestamp, sanitized_objective, continuation=False):
     console.print("\nCalling Opus to provide the refined final output for your objective:")
     messages = [
         {
             "role": "user",
-            "content": [
-                {"type": "text", "text": "Objective: " + objective + "\n\nSub-task results:\n" + "\n".join(sub_task_results) + "\n\nPlease review and refine the sub-task results into a cohesive final output. Add any missing information or details as needed. When working on code projects, ONLY AND ONLY IF THE PROJECT IS CLEARLY A CODING ONE please provide the following:\n1. Project Name: Create a concise and appropriate project name that fits the project based on what it's creating. The project name should be no more than 20 characters long.\n2. Folder Structure: Provide the folder structure as a valid JSON object, where each key represents a folder or file, and nested keys represent subfolders. Use null values for files. Ensure the JSON is properly formatted without any syntax errors. Please make sure all keys are enclosed in double quotes, and ensure objects are correctly encapsulated with braces, separating items with commas as necessary.\nWrap the JSON object in <folder_structure> tags.\n3. Code Files: For each code file, include ONLY the file name NEVER EVER USE THE FILE PATH OR ANY OTHER FORMATTING YOU ONLY USE THE FOLLOWING format 'Filename: <filename>' followed by the code block enclosed in triple backticks, with the language identifier after the opening backticks, like this:\n\n```python\n<code>\n```"}
-            ]
+            "content": f"Objective: {objective}\n\nSub-task results:\n" + "\n".join(sub_task_results) + "\n\nPlease review and refine the sub-task results into a cohesive final output. Add any missing information or details as needed. When working on code projects, ONLY AND ONLY IF THE PROJECT IS CLEARLY A CODING ONE please provide the following:\n1. Project Name: Create a concise and appropriate project name that fits the project based on what it's creating. The project name should be no more than 20 characters long.\n2. Folder Structure: Provide the folder structure as a valid JSON object, where each key represents a folder or file, and nested keys represent subfolders. Use null values for files. Ensure the JSON is properly formatted without any syntax errors. Please make sure all keys are enclosed in double quotes, and ensure objects are correctly encapsulated with braces, separating items with commas as necessary.\nWrap the JSON object in <folder_structure> tags.\n3. Code Files: For each code file, include ONLY the file name NEVER EVER USE THE FILE PATH OR ANY OTHER FORMATTING YOU ONLY USE THE FOLLOWING format 'Filename: <filename>' followed by the code block enclosed in triple backticks, with the language identifier after the opening backticks, like this:\n\n```python\n<code>\n```"
         }
     ]
 
-    opus_response = anthropic_client.messages.create(
-        model=REFINER_MODEL,
-        max_tokens=4096,
-        messages=messages
-    )
+    try:
+        opus_response = anthropic_client.messages.create(
+            model=REFINER_MODEL,
+            max_tokens=4096,
+            messages=messages
+        )
 
-    response_text = opus_response.content[0].text.strip()
-    console.print(f"Input Tokens: {opus_response.usage.input_tokens}, Output Tokens: {opus_response.usage.output_tokens}")
-    total_cost = calculate_subagent_cost(REFINER_MODEL, opus_response.usage.input_tokens, opus_response.usage.output_tokens)
-    console.print(f"Refine Cost: ${total_cost:.4f}")
+        response_text = opus_response.content[0].text.strip()
+        console.print(f"Input Tokens: {opus_response.usage.input_tokens}, Output Tokens: {opus_response.usage.output_tokens}")
+        total_cost = calculate_subagent_cost(REFINER_MODEL, opus_response.usage.input_tokens, opus_response.usage.output_tokens)
+        console.print(f"Refine Cost: ${total_cost:.4f}")
 
-    if opus_response.usage.output_tokens >= 4000 and not continuation:  # Threshold set to 4000 as a precaution
-        console.print("[bold yellow]Warning:[/bold yellow] Output may be truncated. Attempting to continue the response.")
-        continuation_response_text = anthropic_refine(objective, sub_task_results + [response_text], filename, projectname, continuation=True)
-        response_text += "\n" + continuation_response_text
+        if opus_response.usage.output_tokens >= 4000 and not continuation:  # Threshold set to 4000 as a precaution
+            console.print("[bold yellow]Warning:[/bold yellow] Output may be truncated. Attempting to continue the response.")
+            continuation_response_text = anthropic_refine(objective, sub_task_results + [response_text], timestamp, sanitized_objective, continuation=True)
+            response_text += "\n" + continuation_response_text
 
-    console.print(Panel(response_text, title="[bold green]Final Output[/bold green]", title_align="left", border_style="green"))
-    return response_text
+        console.print(Panel(response_text, title="[bold green]Final Output[/bold green]", title_align="left", border_style="green"))
+        return response_text
+
+    except Exception as e:
+        console.print(Panel(f"Error during Anthropic Opus call: {e}", title="[bold red]Anthropic Opus Error[/bold red]", title_align="left", border_style="red"))
+        return "Error: Unable to refine the final output."
 
 def create_folder_structure(project_name, folder_structure, code_blocks):
     try:
@@ -181,65 +190,20 @@ def create_folders_and_files(current_path, structure, code_blocks):
             else:
                 console.print(Panel(f"Code content not found for file: [bold]{key}[/bold]", title="[bold yellow]Missing Code Content[/bold yellow]", title_align="left", border_style="yellow"))
 
-def process_objective(objective, use_search):
-    file_content = None
-    task_exchanges = []
-    gpt_tasks = []
-
-    while True:
-        previous_results = [result for _, result in task_exchanges]
-        if not task_exchanges:
-            gpt_result, file_content_for_gpt, search_query = gpt_orchestrator(objective, file_content, previous_results, use_search)
-        else:
-            gpt_result, _, search_query = gpt_orchestrator(objective, previous_results=previous_results, use_search=use_search)
-
-        if "The task is complete:" in gpt_result:
-            final_output = gpt_result.replace("The task is complete:", "").strip()
-            break
-        else:
-            sub_task_prompt = gpt_result
-            if file_content_for_gpt and not gpt_tasks:
-                sub_task_prompt = f"{sub_task_prompt}\n\nFile content:\n{file_content_for_gpt}"
-            sub_task_result = gpt_sub_agent(sub_task_prompt, search_query, gpt_tasks, use_search)
-            gpt_tasks.append({"task": sub_task_prompt, "result": sub_task_result})
-            task_exchanges.append((sub_task_prompt, sub_task_result))
-            file_content_for_gpt = None
-
-    sanitized_objective = re.sub(r'\W+', '_', objective)
-    timestamp = datetime.now().strftime("%H-%M-%S")
-    refined_output = anthropic_refine(objective, [result for _, result in task_exchanges], timestamp, sanitized_objective)
-
-    project_name_match = re.search(r'Project Name: (.*)', refined_output)
-    project_name = project_name_match.group(1).strip() if project_name_match else sanitized_objective
-
-    folder_structure_match = re.search(r'<folder_structure>(.*?)</folder_structure>', refined_output, re.DOTALL)
-    folder_structure = {}
-    if folder_structure_match:
-        json_string = folder_structure_match.group(1).strip()
-        try:
-            folder_structure = json.loads(json_string)
-        except json.JSONDecodeError as e:
-            console.print(Panel(f"Error parsing JSON: {e}", title="[bold red]JSON Parsing Error[/bold red]", title_align="left", border_style="red"))
-            console.print(Panel(f"Invalid JSON string: [bold]{json_string}[/bold]", title="[bold red]Invalid JSON String[/bold red]", title_align="left", border_style="red"))
-
-    code_blocks = re.findall(r'Filename: (\S+)\s*```[\w]*\n(.*?)\n```', refined_output, re.DOTALL)
-    create_folder_structure(project_name, folder_structure, code_blocks)
-
-    return project_name
-
 def create_zip(project_name):
-    # Define the path for the downloads folder
-    downloads_folder = os.path.join(os.path.dirname(__file__), 'downloads')
-    os.makedirs(downloads_folder, exist_ok=True)
-    
-    # Define the zip file path in the downloads folder
-    zip_path = os.path.join(downloads_folder, f'{project_name}.zip')
-    
-    # Create a zip file of the project folder
-    shutil.make_archive(zip_path.replace('.zip', ''), 'zip', project_name)
-    
-    # Ensure the zip file was created
-    if not os.path.exists(zip_path):
-        raise FileNotFoundError(f"Failed to create zip file at {zip_path}")
-    
+    downloads_dir = os.path.join(os.getcwd(), 'downloads')
+    os.makedirs(downloads_dir, exist_ok=True)
+    zip_path = os.path.join(downloads_dir, f"{project_name}.zip")
+
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, _, files in os.walk(project_name):
+            for file in files:
+                file_path = os.path.join(root, file)
+                zipf.write(file_path, os.path.relpath(file_path, project_name))
+
     return zip_path
+
+def read_file(file_path):
+    with open(file_path, 'r') as file:
+        content = file.read()
+    return content

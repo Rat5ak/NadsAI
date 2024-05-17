@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from flask import Flask, request, render_template, send_file, url_for
 from flask_socketio import SocketIO, emit
-from maestro_gpt4o import process_objective, create_zip, gpt_orchestrator, gpt_sub_agent, anthropic_refine, create_folder_structure
+from maestro_gpt4o import create_zip, gpt_orchestrator, gpt_sub_agent, anthropic_refine, create_folder_structure
 import html
 
 # Initialize Flask and Flask-SocketIO
@@ -65,8 +65,9 @@ def process_objective_with_updates(objective, use_search):
             file_content_for_gpt = None
         
         # Emit an event to update the client with the current progress
-        safe_sub_task_prompt = html.escape(sub_task_prompt)
-        socketio.emit('progress_update', {'message': f'Processed sub-task: {safe_sub_task_prompt}'})
+        formatted_message = format_progress_message(gpt_result)
+        socketio.emit('progress_update', {'message': formatted_message})
+        print(f'Emitting progress update: {formatted_message}')  # Debug print
         socketio.sleep(1)  # Sleep to ensure the client has time to receive updates
 
     sanitized_objective = re.sub(r'\W+', '_', objective)
@@ -90,6 +91,13 @@ def process_objective_with_updates(objective, use_search):
     create_folder_structure(project_name, folder_structure, code_blocks)
 
     return project_name
+
+def format_progress_message(message):
+    # Escape HTML characters to prevent them from being rendered
+    escaped_message = html.escape(message)
+    # Add basic formatting
+    formatted_message = escaped_message.replace('###', '<br><strong>').replace('**', '<strong>').replace('<br><strong>', '</strong><br><strong>').replace('<br>', '<br><br>')
+    return formatted_message
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
