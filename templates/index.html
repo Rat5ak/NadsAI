@@ -46,7 +46,7 @@
 
         socket.on('progress_update', function(data) {
             const li = document.createElement('li');
-            li.innerHTML = data.message;
+            li.textContent = data.message; // Use textContent instead of innerHTML
             progressList.appendChild(li);
         });
 
