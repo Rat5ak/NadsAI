@@ -6,13 +6,110 @@
     <title>Nads AI Project Generator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            position: relative;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 10px 0;
+            background-color: #007BFF;
+            color: #fff;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 2em;
+        }
+        header p {
+            margin: 5px 0 0;
+            font-size: 1.2em;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        form label {
+            font-size: 1.1em;
+            color: #333;
+        }
+        form input[type="text"],
+        form input[type="checkbox"],
+        form button {
+            padding: 10px;
+            font-size: 1em;
+        }
+        form button {
+            background-color: #007BFF;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        form button:hover {
+            background-color: #0056b3;
+        }
+        #spinner {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+        }
+        #spinner img {
+            width: 100%;
+            height: 100%;
+        }
+        #progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+        #toggle-progress {
+            background-color: #007BFF;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            display: block;
+            margin: 20px auto;
+        }
+        #toggle-progress:hover {
+            background-color: #0056b3;
+        }
+        #download {
+            margin-top: 20px;
+            text-align: center;
+        }
+        #download-link img {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+        }
+    </style>
 </head>
 <body>
-    <header>
-        <h1>Nads AI</h1>
-        <p class="motto">GO-Nads today and start saving up to 90% of development costs and time on your projects!</p>
-    </header>
     <div class="container">
+        <header>
+            <h1>Nads AI</h1>
+            <p>GO-Nads today and start saving up to 90% of development costs and time on your projects!</p>
+        </header>
         <h1>Generate Your Project</h1>
         <form id="generate-form">
             <label for="objective">Objective:</label>
@@ -21,14 +118,19 @@
             <input type="checkbox" id="use_search" name="use_search">
             <button type="submit">Generate</button>
         </form>
-        <div id="progress">
+        <div id="spinner" class="spinner">
+            <img src="{{ url_for('static', filename='spinner.gif') }}" alt="Loading...">
+        </div>
+        <div id="progress-container">
             <h2>Progress:</h2>
             <ul id="progress-list"></ul>
         </div>
+        <button id="toggle-progress">Show Progress</button>
         <div id="download">
             <h2>Download Your Project:</h2>
             <a id="download-link" href="#" style="display: none;">
                 <img src="{{ url_for('static', filename='download.png') }}" alt="Download">
+                Download Project
             </a>
         </div>
     </div>
@@ -37,14 +139,29 @@
         const form = document.getElementById('generate-form');
         const progressList = document.getElementById('progress-list');
         const downloadLink = document.getElementById('download-link');
+        const spinner = document.getElementById('spinner');
+        const progressContainer = document.getElementById('progress-container');
+        const toggleProgressButton = document.getElementById('toggle-progress');
 
         form.addEventListener('submit', function(event) {
             event.preventDefault();
             const formData = new FormData(form);
+            spinner.style.display = 'block';
+            progressContainer.style.display = 'none';
             fetch('/generate', {
                 method: 'POST',
                 body: formData
             });
+        });
+
+        toggleProgressButton.addEventListener('click', function() {
+            if (progressContainer.style.display === 'none') {
+                progressContainer.style.display = 'block';
+                toggleProgressButton.textContent = 'Hide Progress';
+            } else {
+                progressContainer.style.display = 'none';
+                toggleProgressButton.textContent = 'Show Progress';
+            }
         });
 
         socket.on('progress_update', function(data) {
@@ -54,6 +171,7 @@
         });
 
         socket.on('zip_ready', function(data) {
+            spinner.style.display = 'none';
             downloadLink.href = data.zip_url;
             downloadLink.style.display = 'block';
         });
