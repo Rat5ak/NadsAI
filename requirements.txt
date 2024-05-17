@@ -1,0 +1,7 @@
+flask
+anthropic
+rich
+tavily-python
+ollama
+groq
+OPENAI

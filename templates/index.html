@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Generate Your Project</h1>
+        <form id="generate-form">
+            <label for="objective">Objective:</label>
+            <input type="text" id="objective" name="objective" required>
+            <label for="use_search">Use Search:</label>
+            <input type="checkbox" id="use_search" name="use_search">
+            <button type="submit">Generate</button>
+        </form>
+        <div id="progress">
+            <h2>Progress:</h2>
+            <ul id="progress-list"></ul>
+        </div>
+        <div id="download">
+            <h2>Download Your Project:</h2>
+            <a id="download-link" href="#" style="display: none;">
+                <img src="{{ url_for('static', filename='download.png') }}" alt="Download">
+                Download Project
+            </a>
+        </div>
+    </div>
+    <script>
+        const socket = io();
+        const form = document.getElementById('generate-form');
+        const progressList = document.getElementById('progress-list');
+        const downloadLink = document.getElementById('download-link');
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const formData = new FormData(form);
+            fetch('/generate', {
+                method: 'POST',
+                body: formData
+            });
+        });
+
+        socket.on('progress_update', function(data) {
+            const li = document.createElement('li');
+            li.textContent = data.message;
+            progressList.appendChild(li);
+        });
+
+        socket.on('zip_ready', function(data) {
+            downloadLink.href = data.zip_url;
+            downloadLink.style.display = 'block';
+        });
+    </script>
+</body>
+</html>
