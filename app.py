@@ -64,7 +64,7 @@ def process_objective_with_updates(objective, use_search):
             file_content_for_gpt = None
         
         # Emit an event to update the client with the current progress
-        socketio.emit('progress_update', {'message': f'Processed sub-task: {sub_task_prompt}'})
+        socketio.emit('progress_update', {'message': format_progress(sub_task_prompt)})
         socketio.sleep(1)  # Sleep to ensure the client has time to receive updates
 
     sanitized_objective = re.sub(r'\W+', '_', objective)
@@ -88,6 +88,11 @@ def process_objective_with_updates(objective, use_search):
     create_folder_structure(project_name, folder_structure, code_blocks)
 
     return project_name
+
+def format_progress(text):
+    text = re.sub(r'###\s?', '', text)  # Remove markdown headers
+    text = text.replace('\n', '<br>')  # Replace new lines with HTML line breaks
+    return text
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)

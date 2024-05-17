@@ -227,8 +227,19 @@ def process_objective(objective, use_search):
 
     return project_name
 
-def create_zip(folder_name):
-    zip_name = f"{folder_name}.zip"
-    zip_path = os.path.join('downloads', zip_name)
-    shutil.make_archive(zip_path.replace('.zip', ''), 'zip', folder_name)
+def create_zip(project_name):
+    # Define the path for the downloads folder
+    downloads_folder = os.path.join(os.path.dirname(__file__), 'downloads')
+    os.makedirs(downloads_folder, exist_ok=True)
+    
+    # Define the zip file path in the downloads folder
+    zip_path = os.path.join(downloads_folder, f'{project_name}.zip')
+    
+    # Create a zip file of the project folder
+    shutil.make_archive(zip_path.replace('.zip', ''), 'zip', project_name)
+    
+    # Ensure the zip file was created
+    if not os.path.exists(zip_path):
+        raise FileNotFoundError(f"Failed to create zip file at {zip_path}")
+    
     return zip_path

@@ -1,0 +1,18 @@
+{
+    "workbench.iconTheme": "vscode-icons",
+    "editor.inlineSuggest.enabled": true,
+    "files.autoSave": "afterDelay",
+    "security.workspace.trust.untrustedFiles": "open",
+    "vsicons.dontShowNewVersionMessage": true,
+    "redhat.telemetry.enabled": false,
+    "vs-kubernetes": {
+        "vscode-kubernetes.helm-path-windows": "C:\\Users\\danjw\\.vs-kubernetes\\tools\\helm\\windows-amd64\\helm.exe",
+        "vscode-kubernetes.kubectl-path-windows": "C:\\Users\\danjw\\.vs-kubernetes\\tools\\kubectl\\kubectl.exe",
+        "vscode-kubernetes.minikube-path-windows": "C:\\Users\\danjw\\.vs-kubernetes\\tools\\minikube\\windows-amd64\\minikube.exe"
+    },
+    "cmake.configureOnOpen": true,
+    "cmake.showOptionsMovedNotification": false,
+    "python.analysis.extraPaths": [
+        "./venv/Lib/site-packages"
+    ]
+}
