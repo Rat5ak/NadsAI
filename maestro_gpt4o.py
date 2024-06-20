@@ -11,8 +11,8 @@ from anthropic import Anthropic
 from tavily import TavilyClient
 
 # Initialize OpenAI and Anthropic API clients
-openai_client = OpenAI(api_key="sk-nadbot-Wf5jbmmDnoOG9nnxcjo5T3BlbkFJsc9LqRhDBuK6M5RmOtB2")
-anthropic_client = Anthropic(api_key="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")
+openai_client = OpenAI(api_key="Your OpenAI API key here")
+anthropic_client = Anthropic(api_key="Your Anthropic key here")
 
 # Available OpenAI models
 ORCHESTRATOR_MODEL = "gpt-4o"
@@ -91,7 +91,7 @@ def gpt_sub_agent(prompt, search_query=None, previous_gpt_tasks=None, use_search
 
     qna_response = None
     if search_query and use_search:
-        tavily = TavilyClient(api_key="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")
+        tavily = TavilyClient(api_key="Your tavily API key here")
         try:
             qna_response = tavily.qna_search(query=search_query)
             console.print(f"QnA response: {qna_response}", style="yellow")
